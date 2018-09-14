@@ -1,0 +1,28 @@
+buildscript {
+  ext.kotlin_version = '1.2.61'
+  ext.jackson_version = '2.9.5'
+
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+  }
+}
+
+group 'net.joinu'
+version '0.1.0'
+
+apply plugin: 'kotlin'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+  compile "com.fasterxml.jackson.core:jackson-databind:$jackson_version"
+  compile "com.fasterxml.jackson.module:jackson-module-kotlin:$jackson_version"
+
+  testCompile "org.junit.jupiter:junit-jupiter-api:5.3.1"
+}
