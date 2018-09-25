@@ -31,7 +31,7 @@ dependencies {
 val serializedContent = SerializationUtils.anyToJSON(content)
 val deserializedContent: Content = SerializationUtils.jSONToAny(serializedContent)
 
-println(serializedContent == content) // true
+println(deserializedContent == content) // true
 ```
 
 ##### Compression
