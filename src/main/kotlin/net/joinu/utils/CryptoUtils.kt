@@ -13,11 +13,13 @@ object CryptoUtils {
     var SIGNATURE_ALGORITHM = "SHA256withECDSA"
     var HASH_ALGORITHM = "SHA-256"
 
+    private val keyGen: KeyPairGenerator by lazy { KeyPairGenerator.getInstance(KEY_GENERATION_ALGORITHM) }
+
     /**
      * Generates key pair
      */
     fun generateKeyPair(): KeyPair {
-        return KeyPairGenerator.getInstance(KEY_GENERATION_ALGORITHM).genKeyPair()
+        return keyGen.genKeyPair()
     }
 
     /**
@@ -60,7 +62,7 @@ object CryptoUtils {
  * Translates public key to big int
  */
 fun PublicKey.toBigInteger(): BigInteger {
-    return BigInteger(this.encoded)
+    return BigInteger(1, this.encoded)
 }
 
 /**
