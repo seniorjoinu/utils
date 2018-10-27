@@ -29,7 +29,7 @@ object SerializationUtils1 {
         fields.forEach { it.isAccessible = true }
         val values = fields.map { it.get(obj) }
 
-        val buffer = ByteBuffer.allocate(maxSize) // allocate direct maybe?
+        val buffer = ByteBuffer.allocateDirect(maxSize) 
 
         values.forEach { addValue(it, buffer) }
 
