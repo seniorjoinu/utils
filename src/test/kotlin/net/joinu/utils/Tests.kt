@@ -91,6 +91,7 @@ class UtilsTests {
     }
 }
 
+data class NestedDataClass(val value: Int = 10)
 
 data class SampleDataClass(
     val muchText: String = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc tempor tortor ipsum, a tempor ante efficitur ac. Curabitur blandit libero a ex pretium, vitae faucibus ipsum suscipit. Ut posuere fringilla consequat. Suspendisse a risus vulputate, ultricies ante et, porttitor mi. Nam feugiat mi eget orci volutpat finibus. Curabitur sodales accumsan aliquam. Duis sollicitudin aliquet urna, vel commodo diam pulvinar id.\n" +
@@ -104,7 +105,8 @@ data class SampleDataClass(
             "Nunc lorem magna, dignissim non magna eget, accumsan pretium ipsum. Integer at tortor vitae sapien porttitor sagittis id nec diam. Aenean nec orci non metus placerat fringilla. Nunc venenatis dictum porttitor. Vivamus ut metus a libero aliquet sollicitudin. Donec est ligula, iaculis quis nisi a, scelerisque gravida turpis. Sed imperdiet purus ut consectetur dictum. Praesent luctus efficitur finibus. Pellentesque et commodo augue. Praesent sed orci vitae nisl pellentesque rhoncus.",
     val long: Long = 123123L,
     val int: Int = 123,
-    val randomBytes: ByteArray = muchText.toByteArray(StandardCharsets.UTF_8)
+    val randomBytes: ByteArray = muchText.toByteArray(StandardCharsets.UTF_8),
+    val nestedDataClass: NestedDataClass = NestedDataClass()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
