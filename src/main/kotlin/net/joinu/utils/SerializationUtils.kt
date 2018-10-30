@@ -2,11 +2,32 @@ package net.joinu.utils
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import kotlinx.coroutines.runBlocking
 import java.math.BigInteger
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import kotlin.reflect.KClass
+import kotlin.reflect.full.safeCast
+
+
+const val TYPE_NULL: Byte = 0
+const val TYPE_BYTE: Byte = 1
+const val TYPE_SHORT: Byte = 2
+const val TYPE_INT: Byte = 3
+const val TYPE_LONG: Byte = 4
+const val TYPE_FLOAT: Byte = 5
+const val TYPE_DOUBLE: Byte = 6
+const val TYPE_CHAR: Byte = 7
+const val TYPE_BOOLEAN: Byte = 8
+const val TYPE_STRING: Byte = 9
+const val TYPE_BYTEARRAY: Byte = 10
+const val TYPE_BIGINTEGER: Byte = 11
+
+const val TYPE_COLLECTION: Byte = 20
+const val TYPE_MAP: Byte = 21
+
+const val TYPE_CUSTOM: Byte = 30
 
 /**
  * Object that makes serialization easier
@@ -25,74 +46,86 @@ object SerializationUtils {
 }
 
 object SerializationUtils1 {
-    fun dump(obj: Any, buffer: ByteBuffer) {
-        val fields = obj::class.java.declaredFields
-        fields.forEach { it.isAccessible = true }
-        val values = fields.map { it.get(obj) }
+    fun dump(obj: Any?, buffer: ByteBuffer) {
+        if (obj == null) {
+            buffer.put(TYPE_NULL)
+            return
+        }
 
-        values.forEach { addValue(it, buffer) }
-
-        buffer.flip()
+        addValue(obj, buffer)
     }
 
-    private fun addValue(value: Any?, buffer: ByteBuffer) {
-        if (value == null)
-            buffer.putInt(0)
-
+    private fun addValue(value: Any, buffer: ByteBuffer) {
         when (value) {
             is Collection<*> -> {
-                buffer.putInt(20).putInt(value.size)
-                value.forEach { addValue(it, buffer) }
+                buffer.put(TYPE_COLLECTION).putInt(value.size)
+                value.forEach { dump(it, buffer) }
             }
             is Map<*, *> -> {
-                buffer.putInt(21).putInt(value.size)
+                buffer.put(TYPE_MAP).putInt(value.size)
                 value.entries.forEach {
-                    addValue(it.key, buffer)
-                    addValue(it.value, buffer)
+                    dump(it.key, buffer)
+                    dump(it.value, buffer)
                 }
             }
-            // TODO: add user types
             else -> addPrimitiveValue(value, buffer)
         }
     }
 
-    private fun addPrimitiveValue(value: Any?, buffer: ByteBuffer) {
+    private fun addPrimitiveValue(value: Any, buffer: ByteBuffer) {
         when (value) {
-            is Byte -> buffer.putInt(1).put(value)
-            is Short -> buffer.putInt(2).putShort(value)
-            is Int -> buffer.putInt(3).putInt(value)
-            is Long -> buffer.putInt(4).putLong(value)
-            is Float -> buffer.putInt(5).putFloat(value)
-            is Double -> buffer.putInt(6).putDouble(value)
-            is Char -> buffer.putInt(7).putShort(value.toShort())
-            is Boolean -> buffer.putInt(8).putInt(if (value) 1 else 0)
+            is Byte -> buffer.put(TYPE_BYTE).put(value)
+            is Short -> buffer.put(TYPE_SHORT).putShort(value)
+            is Int -> buffer.put(TYPE_INT).putInt(value)
+            is Long -> buffer.put(TYPE_LONG).putLong(value)
+            is Float -> buffer.put(TYPE_FLOAT).putFloat(value)
+            is Double -> buffer.put(TYPE_DOUBLE).putDouble(value)
+            is Char -> buffer.put(TYPE_CHAR).putShort(value.toShort())
+            is Boolean -> buffer.put(TYPE_BOOLEAN).putInt(if (value) 1 else 0)
             is String -> {
                 val bytes = value.toByteArray(StandardCharsets.UTF_16)
-                buffer.putInt(9).putInt(bytes.size).put(bytes)
+                buffer.put(TYPE_STRING).putInt(bytes.size).put(bytes)
             }
-            is ByteArray -> buffer.putInt(10).putInt(value.size).put(value)
+            is ByteArray -> buffer.put(TYPE_BYTEARRAY).putInt(value.size).put(value)
             is BigInteger -> {
                 val bytes = value.toByteArray()
-                buffer.putInt(11).putInt(bytes.size).put(bytes)
+                buffer.put(TYPE_BIGINTEGER).putInt(bytes.size).put(bytes)
+            }
+            else -> { // custom class
+                val fields = value::class.java.declaredFields
+                fields.forEach { it.isAccessible = true }
+                val values = fields.map { it.get(value) }
+
+                buffer.put(TYPE_CUSTOM)
+                val classNameBytes = value::class.java.canonicalName.toByteArray(StandardCharsets.UTF_16)
+                buffer.putInt(classNameBytes.size).put(classNameBytes)
+
+                values.forEach {
+                    if (it == null)
+                        buffer.put(TYPE_NULL)
+                    else
+                        dump(it, buffer)
+                }
             }
         }
     }
 
-    fun <T : Any> load(buffer: ByteBuffer, clazz: KClass<T>): T {
-        val args = mutableListOf<Any?>()
+    fun <T : Any> load(buffer: ByteBuffer, clazz: KClass<T>): T? {
+        val value = parseValue(buffer)
 
-        while (buffer.hasRemaining()) {
-            args.add(parseValue(buffer))
-        }
-
-        return clazz.constructors.first().call(*args.toTypedArray())
+        return if (value == null)
+            null
+        else
+            (clazz::safeCast)(value)
     }
 
+    inline fun <reified T : Any> load(buffer: ByteBuffer) = load(buffer, T::class)
+
     private fun parseValue(buffer: ByteBuffer): Any? {
-        val type = buffer.int
+        val type = buffer.get()
 
         when (type) {
-            20 -> {
+            TYPE_COLLECTION -> {
                 val size = buffer.int
                 if (size == 0) return emptyList<Any?>()
 
@@ -108,7 +141,7 @@ object SerializationUtils1 {
                     genericList
                 }
             }
-            21 -> {
+            TYPE_MAP -> {
                 val size = buffer.int
                 if (size == 0) return emptyMap<Any?, Any?>()
 
@@ -138,37 +171,55 @@ object SerializationUtils1 {
     }
 
     @Throws(DeserializationException::class)
-    private fun parsePrimitiveValue(type: Int, buffer: ByteBuffer): Any? {
+    private fun parsePrimitiveValue(type: Byte, buffer: ByteBuffer): Any? {
         return when (type) {
-            0 -> null
-            1 -> buffer.get()
-            2 -> buffer.short
-            3 -> buffer.int
-            4 -> buffer.long
-            5 -> buffer.float
-            6 -> buffer.double
-            7 -> buffer.char
-            8 -> buffer.int == 1
-            9 -> {
+            TYPE_NULL -> null
+            TYPE_BYTE -> buffer.get()
+            TYPE_SHORT -> buffer.short
+            TYPE_INT -> buffer.int
+            TYPE_LONG -> buffer.long
+            TYPE_FLOAT -> buffer.float
+            TYPE_DOUBLE -> buffer.double
+            TYPE_CHAR -> buffer.char
+            TYPE_BOOLEAN -> buffer.int == 1
+            TYPE_STRING -> {
                 val size = buffer.int
                 val bytes = ByteArray(size)
                 buffer.get(bytes)
 
                 bytes.toString(StandardCharsets.UTF_16)
             }
-            10 -> {
+            TYPE_BYTEARRAY -> {
                 val size = buffer.int
                 val bytes = ByteArray(size)
                 buffer.get(bytes)
 
                 bytes
             }
-            11 -> {
+            TYPE_BIGINTEGER -> {
                 val size = buffer.int
                 val bytes = ByteArray(size)
                 buffer.get(bytes)
 
                 BigInteger(bytes)
+            }
+            TYPE_CUSTOM -> {
+                val size = buffer.int
+                val bytes = ByteArray(size)
+                buffer.get(bytes)
+
+                val className = bytes.toString(StandardCharsets.UTF_16)
+                val clazz = Class.forName(className)
+
+                val args = mutableListOf<Any?>()
+
+                while (buffer.hasRemaining()) {
+                    args.add(parseValue(buffer))
+                }
+
+                val constructor = clazz.constructors.first { it.parameterCount == args.size } // TODO: add intelligence
+
+                constructor.newInstance(*args.toTypedArray())
             }
             else -> {
                 throw DeserializationException("Unable to find deserialization strategy for type: $type")
@@ -181,38 +232,41 @@ data class DeserializationException(override val message: String) : RuntimeExcep
 data class SerializationException(override val message: String) : RuntimeException(message)
 
 data class SimpleClass(
-    val a: Byte? = 1,
-    val b: Short? = null,
-    val c: Int = 3,
-    val d: Long = 4,
-    val e: Float = 5F,
-    val f: Double = 6.0,
-    val g: Char = 'a',
-    val h: Boolean = false,
-    val j: String = "Hello, world!",
-    val k: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
-    val l: Map<Int, Int> = k.associate { it to it }
+        val a: Byte? = 1,
+        val b: Short? = null,
+        val c: Int = 3,
+        val d: Long = 4,
+        val e: Float = 5F,
+        val f: Double = 6.0,
+        val g: Char = 'a',
+        val h: Boolean = false,
+        val j: String = "Hello, world!",
+        val k: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
+        val l: Map<Int, Int> = k.associate { it to it }
 )
 
 data class MyCustomClass(val a: Int, val b: String, val c: InetSocketAddress, val d: Array<Int> = arrayOf(1, 2, 3))
 
-fun main(args: Array<String>) {
+fun main(args: Array<String>) = runBlocking {
     val objects = (0..9999).map { SimpleClass() }
 
     val startJackson = System.nanoTime()
     objects
-        .map { SerializationUtils.anyToBytes(it) }
-        .map { SerializationUtils.bytesToAny(it, SimpleClass::class.java) }
+            .map { SerializationUtils.anyToBytes(it) }
+            .map { SerializationUtils.bytesToAny(it, SimpleClass::class.java) }
     val endJackson = System.nanoTime()
 
     val startMine = System.nanoTime()
     objects
-        .map {
-            val buffer = ByteBuffer.allocateDirect(10000)
-            SerializationUtils1.dump(it, buffer)
-            buffer
-        }
-        .map { SerializationUtils1.load(it, SimpleClass::class) }
+            .map {
+                val buffer = ByteBuffer.allocateDirect(10000)
+                SerializationUtils1.dump(it, buffer)
+                buffer.flip()
+                buffer
+            }
+            .map {
+                SerializationUtils1.load(it, SimpleClass::class)
+            }
     val endMine = System.nanoTime()
 
     val jacksonTime = endJackson - startJackson
