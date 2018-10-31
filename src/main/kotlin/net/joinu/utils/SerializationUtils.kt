@@ -80,11 +80,11 @@ object SerializationUtils1 {
             is Long -> buffer.put(TYPE_LONG).putLong(value)
             is Float -> buffer.put(TYPE_FLOAT).putFloat(value)
             is Double -> buffer.put(TYPE_DOUBLE).putDouble(value)
-            is Char -> buffer.put(TYPE_CHAR).putShort(value.toShort())
+            is Char -> buffer.put(TYPE_CHAR).putChar(value)
             is Boolean -> buffer.put(TYPE_BOOLEAN).putInt(if (value) 1 else 0)
             is String -> {
-                val bytes = value.toByteArray(StandardCharsets.UTF_16)
-                buffer.put(TYPE_STRING).putInt(bytes.size).put(bytes)
+                buffer.put(TYPE_STRING).putInt(value.length)
+                value.forEach { buffer.putChar(it) }
             }
             is ByteArray -> buffer.put(TYPE_BYTEARRAY).putInt(value.size).put(value)
             is BigInteger -> {
@@ -184,10 +184,9 @@ object SerializationUtils1 {
             TYPE_BOOLEAN -> buffer.int == 1
             TYPE_STRING -> {
                 val size = buffer.int
-                val bytes = ByteArray(size)
-                buffer.get(bytes)
-
-                bytes.toString(StandardCharsets.UTF_16)
+                (0 until size)
+                    .map { buffer.char }
+                    .joinToString()
             }
             TYPE_BYTEARRAY -> {
                 val size = buffer.int
@@ -246,6 +245,10 @@ data class SimpleClass(
 )
 
 data class MyCustomClass(val a: Int, val b: String, val c: InetSocketAddress, val d: Array<Int> = arrayOf(1, 2, 3))
+
+/*
+    TODO: implement string encoding-decoding self
+ */
 
 fun main(args: Array<String>) = runBlocking {
     val objects = (0..9999).map { SimpleClass() }
