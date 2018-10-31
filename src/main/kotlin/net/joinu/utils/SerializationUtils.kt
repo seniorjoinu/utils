@@ -151,15 +151,17 @@ object SerializationUtils1 {
 
                 if (genericNonNullKeyList.isEmpty() or genericNonNullValueList.isEmpty()) return genericMap
 
-                val keyType = if (genericNonNullKeyList.all { it::class.java.isAssignableFrom(genericNonNullKeyList.first()::class.java) })
-                    genericNonNullKeyList.first()::class
-                else
-                    Any::class
+                val keyType =
+                    if (genericNonNullKeyList.all { it::class.java.isAssignableFrom(genericNonNullKeyList.first()::class.java) })
+                        genericNonNullKeyList.first()::class
+                    else
+                        Any::class
 
-                val valueType = if (genericNonNullValueList.all { it::class.java.isAssignableFrom(genericNonNullValueList.first()::class.java) })
-                    genericNonNullValueList.first()::class
-                else
-                    Any::class
+                val valueType =
+                    if (genericNonNullValueList.all { it::class.java.isAssignableFrom(genericNonNullValueList.first()::class.java) })
+                        genericNonNullValueList.first()::class
+                    else
+                        Any::class
 
                 val typedKeyList = genericMap.keys.filterIsInstance(keyType.java)
                 val typedValueList = genericMap.values.filterIsInstance(valueType.java)
@@ -186,7 +188,7 @@ object SerializationUtils1 {
                 val size = buffer.int
                 (0 until size)
                     .map { buffer.char }
-                    .joinToString()
+                    .joinToString(separator = "")
             }
             TYPE_BYTEARRAY -> {
                 val size = buffer.int
@@ -231,17 +233,17 @@ data class DeserializationException(override val message: String) : RuntimeExcep
 data class SerializationException(override val message: String) : RuntimeException(message)
 
 data class SimpleClass(
-        val a: Byte? = 1,
-        val b: Short? = null,
-        val c: Int = 3,
-        val d: Long = 4,
-        val e: Float = 5F,
-        val f: Double = 6.0,
-        val g: Char = 'a',
-        val h: Boolean = false,
-        val j: String = "Hello, world!",
-        val k: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
-        val l: Map<Int, Int> = k.associate { it to it }
+    val a: Byte? = 1,
+    val b: Short? = null,
+    val c: Int = 3,
+    val d: Long = 4,
+    val e: Float = 5F,
+    val f: Double = 6.0,
+    val g: Char = 'a',
+    val h: Boolean = false,
+    val j: String = "Hello, world!",
+    val k: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
+    val l: Map<Int, Int> = k.associate { it to it }
 )
 
 data class MyCustomClass(val a: Int, val b: String, val c: InetSocketAddress, val d: Array<Int> = arrayOf(1, 2, 3))
@@ -255,21 +257,21 @@ fun main(args: Array<String>) = runBlocking {
 
     val startJackson = System.nanoTime()
     objects
-            .map { SerializationUtils.anyToBytes(it) }
-            .map { SerializationUtils.bytesToAny(it, SimpleClass::class.java) }
+        .map { SerializationUtils.anyToBytes(it) }
+        .map { SerializationUtils.bytesToAny(it, SimpleClass::class.java) }
     val endJackson = System.nanoTime()
 
     val startMine = System.nanoTime()
     objects
-            .map {
-                val buffer = ByteBuffer.allocateDirect(10000)
-                SerializationUtils1.dump(it, buffer)
-                buffer.flip()
-                buffer
-            }
-            .map {
-                SerializationUtils1.load(it, SimpleClass::class)
-            }
+        .map {
+            val buffer = ByteBuffer.allocateDirect(10000)
+            SerializationUtils1.dump(it, buffer)
+            buffer.flip()
+            buffer
+        }
+        .map {
+            SerializationUtils1.load(it, SimpleClass::class)
+        }
     val endMine = System.nanoTime()
 
     val jacksonTime = endJackson - startJackson
