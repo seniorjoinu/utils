@@ -2,9 +2,7 @@ package net.joinu.utils
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import kotlinx.coroutines.runBlocking
 import java.math.BigInteger
-import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import kotlin.reflect.KClass
@@ -231,54 +229,3 @@ object SerializationUtils1 {
 
 data class DeserializationException(override val message: String) : RuntimeException(message)
 data class SerializationException(override val message: String) : RuntimeException(message)
-
-data class SimpleClass(
-    val a: Byte? = 1,
-    val b: Short? = null,
-    val c: Int = 3,
-    val d: Long = 4,
-    val e: Float = 5F,
-    val f: Double = 6.0,
-    val g: Char = 'a',
-    val h: Boolean = false,
-    val j: String = "Hello, world!",
-    val k: List<Int> = listOf(1, 2, 3, 4, 5, 6, 7),
-    val l: Map<Int, Int> = k.associate { it to it }
-)
-
-data class MyCustomClass(val a: Int, val b: String, val c: InetSocketAddress, val d: Array<Int> = arrayOf(1, 2, 3))
-
-/*
-    TODO: implement string encoding-decoding self
- */
-
-fun main(args: Array<String>) = runBlocking {
-    val objects = (0..9999).map { SimpleClass() }
-
-    val startJackson = System.nanoTime()
-    objects
-        .map { SerializationUtils.anyToBytes(it) }
-        .map { SerializationUtils.bytesToAny(it, SimpleClass::class.java) }
-    val endJackson = System.nanoTime()
-
-    val startMine = System.nanoTime()
-    objects
-        .map {
-            val buffer = ByteBuffer.allocateDirect(10000)
-            SerializationUtils1.dump(it, buffer)
-            buffer.flip()
-            buffer
-        }
-        .map {
-            SerializationUtils1.load(it, SimpleClass::class)
-        }
-    val endMine = System.nanoTime()
-
-    val jacksonTime = endJackson - startJackson
-    val mineTime = endMine - startMine
-
-    println("Benchmark finished!")
-    println("\tJackson time: ${jacksonTime.toFloat() / 1000000} ms")
-    println("\tMine time: ${mineTime.toFloat() / 1000000} ms")
-    println("\tMine is ${jacksonTime.toFloat() / mineTime.toFloat()} times faster")
-}
