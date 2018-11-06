@@ -1,7 +1,9 @@
 package net.joinu.utils
 
+import kotlinx.coroutines.runBlocking
 import net.joinu.utils.CryptoUtils.KEY_GENERATION_ALGORITHM
 import org.junit.jupiter.api.Test
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.*
 
@@ -11,28 +13,31 @@ class UtilsTests {
     fun `serialization and deserialization works`() {
         val data = SampleDataClass()
 
-        val serializedDataToBytes = SerializationUtils.anyToBytes(data)
-        val deserializedDataFromBytes = SerializationUtils.bytesToAny<SampleDataClass>(serializedDataToBytes)
+        val buffer = ByteBuffer.allocateDirect(10000)
+        SerializationUtils.dump(data, buffer)
+
+        buffer.flip()
+        val deserializedDataFromBytes = SerializationUtils.load<SampleDataClass>(buffer)
 
         assert(data == deserializedDataFromBytes)
-
-        val serializedDataToJSON = SerializationUtils.anyToJSON(data)
-        val deserializedDataFromJSON = SerializationUtils.jSONToAny<SampleDataClass>(serializedDataToJSON)
-
-        assert(data == deserializedDataFromJSON)
     }
 
     @Test
     fun `compression and decompression works`() {
         val data = SampleDataClass()
 
-        val serializedData = SerializationUtils.anyToBytes(data)
-        val compressedAndSerializedData = CompressionUtils.compress(serializedData)
-        val decompressedAndSerializedData = CompressionUtils.decompress(compressedAndSerializedData)
-        val decompressedAndDeserializedData =
-            SerializationUtils.bytesToAny<SampleDataClass>(decompressedAndSerializedData)
+        val buffer = ByteBuffer.allocateDirect(10000)
+        SerializationUtils.dump(data, buffer)
+        buffer.flip()
+        val bytes = byteArrayFrom(buffer)
 
-        assert(Arrays.equals(decompressedAndSerializedData, serializedData))
+        val compressedAndSerializedData = CompressionUtils.compress(bytes)
+        val decompressedAndSerializedData = CompressionUtils.decompress(compressedAndSerializedData)
+
+        val decompressedBuffer = ByteBuffer.wrap(decompressedAndSerializedData)
+        val decompressedAndDeserializedData =
+            SerializationUtils.load<SampleDataClass>(decompressedBuffer)
+
         assert(decompressedAndDeserializedData == data)
     }
 
@@ -89,6 +94,15 @@ class UtilsTests {
         assert(hash.isNotEmpty()) { "hash is empty" }
         assert(hash.size == 32) { "hash length is not 256 bits" }
     }
+
+    @Test
+    fun `classpath scan works properly`() {
+        runBlocking {
+            val classes = ClasspathUtils.getClassesOfPackage(listOf("net.joinu.utils"))
+
+            assert(classes.contains(ClasspathUtils::class.java)) { "Classpath scanner doesn't work" }
+        }
+    }
 }
 
 data class NestedDataClass(val value: Int = 10)
@@ -129,4 +143,11 @@ data class SampleDataClass(
         result = 31 * result + Arrays.hashCode(randomBytes)
         return result
     }
+}
+
+fun byteArrayFrom(buffer: ByteBuffer): ByteArray {
+    val byteArray = ByteArray(buffer.limit())
+    buffer.get(byteArray)
+
+    return byteArray
 }

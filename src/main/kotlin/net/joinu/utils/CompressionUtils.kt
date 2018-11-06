@@ -8,6 +8,8 @@ import java.util.zip.Inflater
  * Object that makes compression easier
  */
 object CompressionUtils {
+
+    @JvmStatic
     fun compress(data: ByteArray): ByteArray {
         val deflater = Deflater(Deflater.BEST_SPEED)
         deflater.setInput(data)
@@ -20,6 +22,7 @@ object CompressionUtils {
         return output.copyOfRange(0, size)
     }
 
+    @JvmStatic
     fun decompress(data: ByteArray): ByteArray {
         val inflater = Inflater()
         inflater.setInput(data)

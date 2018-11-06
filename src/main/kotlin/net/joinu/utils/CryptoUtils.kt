@@ -13,11 +13,12 @@ object CryptoUtils {
     var SIGNATURE_ALGORITHM = "SHA256withECDSA"
     var HASH_ALGORITHM = "SHA-256"
 
-    private val keyGen: KeyPairGenerator by lazy { KeyPairGenerator.getInstance(KEY_GENERATION_ALGORITHM) }
+    @JvmStatic private val keyGen: KeyPairGenerator by lazy { KeyPairGenerator.getInstance(KEY_GENERATION_ALGORITHM) }
 
     /**
      * Generates key pair
      */
+    @JvmStatic
     fun generateKeyPair(): KeyPair {
         return keyGen.genKeyPair()
     }
@@ -25,6 +26,7 @@ object CryptoUtils {
     /**
      * Creates signature of specified data with provided private key
      */
+    @JvmStatic
     fun sign(vararg data: ByteArray?, providePrivateKey: () -> PrivateKey): ByteArray {
         val signatureGenerator = Signature.getInstance(SIGNATURE_ALGORITHM)
         signatureGenerator.initSign(providePrivateKey())
@@ -37,6 +39,7 @@ object CryptoUtils {
     /**
      * Verifies if specified signature of specified data is created by specified public key
      */
+    @JvmStatic
     fun verify(signature: ByteArray, vararg data: ByteArray?, providePublicKey: () -> PublicKey): Boolean {
         val signatureGenerator = Signature.getInstance(SIGNATURE_ALGORITHM)
         signatureGenerator.initVerify(providePublicKey())
@@ -49,6 +52,7 @@ object CryptoUtils {
     /**
      * Creates digest of specified data
      */
+    @JvmStatic
     fun hash(vararg data: ByteArray?): ByteArray {
         val md = MessageDigest.getInstance(HASH_ALGORITHM)
 

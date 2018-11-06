@@ -1,7 +1,5 @@
 package net.joinu.utils
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
 import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -31,19 +29,15 @@ const val TYPE_CUSTOM: Byte = 30
  * Object that makes serialization easier
  */
 object SerializationUtils {
-    private val mapper: ObjectMapper = ObjectMapper().registerModule(KotlinModule())
 
-    fun anyToJSON(obj: Any): String = mapper.writeValueAsString(obj)
-    fun anyToBytes(obj: Any): ByteArray = mapper.writeValueAsBytes(obj)
-
-    inline fun <reified T : Any> jSONToAny(json: String): T = jSONToAny(json, T::class.java)
-    inline fun <reified T : Any> bytesToAny(bytes: ByteArray): T = bytesToAny(bytes, T::class.java)
-
-    fun <T : Any> jSONToAny(json: String, clazz: Class<T>): T = mapper.readValue(json, clazz)
-    fun <T : Any> bytesToAny(bytes: ByteArray, clazz: Class<T>): T = mapper.readValue(bytes, clazz)
-}
-
-object SerializationUtils1 {
+    /**
+     * Dumps object to [ByteBuffer].
+     * Warning! You should manually flip the buffer.
+     *
+     * @param obj: [Any]                <optional> object to dump
+     * @param buffer: [ByteBuffer]      <by link> result buffer
+     */
+    @JvmStatic
     fun dump(obj: Any?, buffer: ByteBuffer) {
         if (obj == null) {
             buffer.put(TYPE_NULL)
@@ -53,6 +47,28 @@ object SerializationUtils1 {
         addValue(obj, buffer)
     }
 
+    /**
+     * Loads object of specific class from [ByteBuffer]
+     * Warning! You should manually flip the buffer.
+     *
+     * @param buffer: [ByteBuffer]      <by link> buffer with serialized object
+     * @param clazz: [KClass]           KClass of the target object
+     *
+     * @return                          instance of [KClass]
+     */
+    @JvmStatic
+    fun <T : Any> load(buffer: ByteBuffer, clazz: KClass<T>): T? {
+        val value = parseValue(buffer)
+
+        return if (value == null)
+            null
+        else
+            (clazz::safeCast)(value)
+    }
+
+    inline fun <reified T : Any> load(buffer: ByteBuffer) = load(buffer, T::class)
+
+    @JvmStatic
     private fun addValue(value: Any, buffer: ByteBuffer) {
         when (value) {
             is Collection<*> -> {
@@ -70,6 +86,7 @@ object SerializationUtils1 {
         }
     }
 
+    @JvmStatic
     private fun addPrimitiveValue(value: Any, buffer: ByteBuffer) {
         when (value) {
             is Byte -> buffer.put(TYPE_BYTE).put(value)
@@ -108,69 +125,66 @@ object SerializationUtils1 {
         }
     }
 
-    fun <T : Any> load(buffer: ByteBuffer, clazz: KClass<T>): T? {
-        val value = parseValue(buffer)
-
-        return if (value == null)
-            null
-        else
-            (clazz::safeCast)(value)
-    }
-
-    inline fun <reified T : Any> load(buffer: ByteBuffer) = load(buffer, T::class)
-
+    @JvmStatic
     private fun parseValue(buffer: ByteBuffer): Any? {
         val type = buffer.get()
 
-        when (type) {
-            TYPE_COLLECTION -> {
-                val size = buffer.int
-                if (size == 0) return emptyList<Any?>()
-
-                val genericList = (1..size).map { parseValue(buffer) }
-                val genericNonNullList = genericList.filterNotNull()
-
-                if (genericNonNullList.isEmpty()) return genericList
-
-                // there is a bug with nulls, i can feel it -,-
-                return if (genericNonNullList.all { it::class.java.isAssignableFrom(genericNonNullList.first()::class.java) }) {
-                    genericList.filterIsInstance(genericNonNullList.first()::class.java)
-                } else {
-                    genericList
-                }
-            }
-            TYPE_MAP -> {
-                val size = buffer.int
-                if (size == 0) return emptyMap<Any?, Any?>()
-
-                val genericMap = (1..size).associate { parseValue(buffer) to parseValue(buffer) }
-                val genericNonNullKeyList = genericMap.keys.filterNotNull()
-                val genericNonNullValueList = genericMap.values.filterNotNull()
-
-                if (genericNonNullKeyList.isEmpty() or genericNonNullValueList.isEmpty()) return genericMap
-
-                val keyType =
-                    if (genericNonNullKeyList.all { it::class.java.isAssignableFrom(genericNonNullKeyList.first()::class.java) })
-                        genericNonNullKeyList.first()::class
-                    else
-                        Any::class
-
-                val valueType =
-                    if (genericNonNullValueList.all { it::class.java.isAssignableFrom(genericNonNullValueList.first()::class.java) })
-                        genericNonNullValueList.first()::class
-                    else
-                        Any::class
-
-                val typedKeyList = genericMap.keys.filterIsInstance(keyType.java)
-                val typedValueList = genericMap.values.filterIsInstance(valueType.java)
-
-                return typedKeyList.associate { it to typedValueList[typedKeyList.indexOf(it)] }
-            }
-            else -> return parsePrimitiveValue(type, buffer)
+        return when (type) {
+            TYPE_COLLECTION -> parseCollection(buffer)
+            TYPE_MAP -> parseMap(buffer)
+            else -> parsePrimitiveValue(type, buffer)
         }
     }
 
+    @JvmStatic
+    private fun parseCollection(buffer: ByteBuffer): Collection<*> {
+        val size = buffer.int
+        if (size == 0) return emptyList<Any?>()
+
+        val genericList = (1..size).map { parseValue(buffer) }
+        val genericNonNullList = genericList.filterNotNull()
+
+        if (genericNonNullList.isEmpty()) return genericList
+
+        // there is a bug with nulls, i can feel it -,-
+        return if (genericNonNullList.all { it::class.java.isAssignableFrom(genericNonNullList.first()::class.java) }) {
+            genericList.filterIsInstance(genericNonNullList.first()::class.java)
+        } else {
+            genericList
+        }
+    }
+
+    @JvmStatic
+    private fun parseMap(buffer: ByteBuffer): Map<*, *> {
+        val size = buffer.int
+        if (size == 0) return emptyMap<Any?, Any?>()
+
+        val genericMap = (1..size).associate { parseValue(buffer) to parseValue(buffer) }
+        val genericNonNullKeyList = genericMap.keys.filterNotNull()
+        val genericNonNullValueList = genericMap.values.filterNotNull()
+
+        if (genericNonNullKeyList.isEmpty() or genericNonNullValueList.isEmpty()) return genericMap
+
+        val keyType =
+            if (genericNonNullKeyList.all { it::class.java.isAssignableFrom(genericNonNullKeyList.first()::class.java) })
+                genericNonNullKeyList.first()::class
+            else
+                Any::class
+
+        val valueType =
+            if (genericNonNullValueList.all { it::class.java.isAssignableFrom(genericNonNullValueList.first()::class.java) })
+                genericNonNullValueList.first()::class
+            else
+                Any::class
+
+        val typedKeyList = genericMap.keys.filterIsInstance(keyType.java)
+        val typedValueList = genericMap.values.filterIsInstance(valueType.java)
+
+        return typedKeyList.associate { it to typedValueList[typedKeyList.indexOf(it)] }
+    }
+
     @Throws(DeserializationException::class)
+    @JvmStatic
     private fun parsePrimitiveValue(type: Byte, buffer: ByteBuffer): Any? {
         return when (type) {
             TYPE_NULL -> null
